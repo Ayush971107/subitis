@@ -2,3 +2,6 @@ DC_Crisis_Line_Responder_Training_Manual_structured.md
 Dispatch_Training_Manual_structured.md
 .env
 .DS_Store
+node_modules/
+.next/
+pnpm-lock.yaml
