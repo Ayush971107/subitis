@@ -31,6 +31,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "dotenv" },
     { name = "groq" },
+    { name = "letta-client" },
     { name = "openai" },
     { name = "pinecone" },
     { name = "python-dotenv" },
@@ -42,6 +43,7 @@ dependencies = [
 requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "groq", specifier = ">=0.28.0" },
+    { name = "letta-client", specifier = ">=0.1.167" },
     { name = "openai", specifier = ">=1.90.0" },
     { name = "pinecone", specifier = ">=7.2.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
@@ -164,6 +166,15 @@ wheels = [
 ]
 
 [[package]]
+name = "httpx-sse"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/60/8f4281fa9bbf3c8034fd54c0e7412e66edbab6bc74c4996bd616f8d0406e/httpx-sse-0.4.0.tar.gz", hash = "sha256:1e81a3a3070ce322add1d3529ed42eb5f70817f45ed6ec915ab753f961139721", size = 12624 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/9b/a181f281f65d776426002f330c31849b86b31fc9d848db62e16f03ff739f/httpx_sse-0.4.0-py3-none-any.whl", hash = "sha256:f329af6eae57eaa2bdfd962b42524764af68075ea87370a2de920af5341e318f", size = 7819 },
+]
+
+[[package]]
 name = "idna"
 version = "3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -206,6 +217,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d8/b3/2bd02071c5a2430d0b70403a34411fc519c2f227da7b03da9ba6a956f931/jiter-0.10.0-cp314-cp314-win32.whl", hash = "sha256:ac509f7eccca54b2a29daeb516fb95b6f0bd0d0d8084efaf8ed5dfc7b9f0b357", size = 210127 },
     { url = "https://files.pythonhosted.org/packages/03/0c/5fe86614ea050c3ecd728ab4035534387cd41e7c1855ef6c031f1ca93e3f/jiter-0.10.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:5ed975b83a2b8639356151cef5c0d597c68376fc4922b45d0eb384ac058cfa00", size = 318527 },
     { url = "https://files.pythonhosted.org/packages/b3/4a/4175a563579e884192ba6e81725fc0448b042024419be8d83aa8a80a3f44/jiter-0.10.0-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3aa96f2abba33dc77f79b4cf791840230375f9534e5fac927ccceb58c5e604a5", size = 354213 },
+]
+
+[[package]]
+name = "letta-client"
+version = "0.1.167"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/f6/80124c4f6f3d909acc9165b371bc3c638079307d0a9df0d8a88779b9b4ac/letta_client-0.1.167.tar.gz", hash = "sha256:585f25d74184836b0ae27203b785dbe5839e39a43bda6dff00b955a9472aa050", size = 113231 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/c7/804fcbfe6e87498d841796f5a52fde0db3a053c81179e41eae6339ca45be/letta_client-0.1.167-py3-none-any.whl", hash = "sha256:2027d0e2c0bc4b7452ba59f59b62e20348a810388dd1c0259121cb1b3e1ae25c", size = 296822 },
 ]
 
 [[package]]

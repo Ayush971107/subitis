@@ -8,3 +8,8 @@ pnpm-lock.yaml
 *.pyc
 test_subitis_guides.py
 test_vector_db.py
+*.json
+agent_fast.py
+highway.py
+house_fire.py
+roadside.py
