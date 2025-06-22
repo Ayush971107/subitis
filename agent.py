@@ -157,9 +157,19 @@ class DispatcherAgent:
         rag_context = "\n\n".join(passages)
 
         # 3) Build prompt for Groq
-        system_prompt = """You are a crisis-dispatch copilot. Your job is to:
-1. Update the running summary with new facts from the transcript
-2. Provide concise advice based on dispatcher guidelines
+        system_prompt = f"""You are an AI assistant helping emergency dispatchers during live 911 calls.
+
+You will receive:
+1. Current call summary from memory
+2. Dispatcher guidelines/protocols from knowledge base
+3. Current conversation context (full caller-dispatcher exchange history)
+4. New caller message
+
+Your job:
+- Analyze what the caller just said in context of the full conversation
+- Identify any NEW information that hasn't been addressed yet
+- Avoid repeating guidance the dispatcher has already given
+- Provide specific, actionable advice for what the dispatcher should do/ask next
 
 Respond with a JSON object containing:
 - "summary": array of SHORT bullet-point facts (max 5-8 words each)
@@ -176,10 +186,9 @@ Be concise and focus on actionable information."""
 Dispatcher guidelines context:
 {rag_context}
 
-New transcript segment:
 {transcript_chunk}
 
-Update the summary with any new facts and provide advice."""
+Analyze the conversation and provide updated summary with advice for what the dispatcher should do next."""
 
         # 4) Call Groq
         groq_start = time.time()

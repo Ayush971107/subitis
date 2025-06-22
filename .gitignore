@@ -5,3 +5,6 @@ Dispatch_Training_Manual_structured.md
 *.pyc
 test_subitis_guides.py
 test_vector_db.py
+*.json
+agent_fast.py
+conversation_simulator.py
