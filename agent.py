@@ -70,6 +70,7 @@ class DispatcherAgent:
         self.conversation_cache = ""
         self.summary_cache_time = 0
         self.rag_cache = {}
+        self.prev_advice_cache = ""
         
     def _get_text_hash(self, text: str) -> str:
         """Generate a hash for caching purposes"""
@@ -214,29 +215,39 @@ class DispatcherAgent:
         rag_context = "\n\n".join(passages)
 
         # 4) Build prompt for Groq
-        system_prompt = """You are an AI assistant helping emergency dispatchers during live 911 calls.
+        system_prompt = """### SYSTEM PROMPT  – Emergency-Dispatcher Copilot ###
 
-You will receive:
-1. Current call summary from memory
-2. Dispatcher guidelines/protocols from knowledge base
-3. Complete conversation history between caller and dispatcher
-4. Most recent message (from either caller or dispatcher)
+You are an AI assistant supporting 911 dispatchers in real-time.
 
-Your job:
-- Analyze the conversation in full context
-- Identify any NEW information that hasn't been addressed yet
-- Track what guidance has already been given by the dispatcher
-- Provide specific, actionable advice for what the dispatcher should do/ask next
-- Consider the full conversation flow when generating responses
+**INPUT (every turn)**  
+1. **memory_summary** – current running summary (array of brief bullets)  
+2. **guidelines** – dispatcher protocols / SOPs relevant to the call  
+3. **history** – full caller–dispatcher transcript up to now  
+4. **last_msg** – most recent line from caller *or* dispatcher  
+5. **prev_advice** – the advice you gave on the immediately-previous turn  
 
-Respond with a JSON object containing:
-- "summary": array of SHORT bullet-point facts (max 5-8 words each)
-- "advice": string with specific guidance for the dispatcher
+**YOUR TASKS**  
+- Understand the entire context, but respond **only to last_msg**.  
+- Detect **new, unaddressed facts** and merge them into *memory_summary* (add or update; max 5-8 words each).  
+- NEVER repeat anything found in **prev_advice**.  
+- Generate **specific, actionable guidance** for the dispatcher in **atmost two bullet points**, written in **second-person** (“You should …”, “Ask …”).  
 
-CRITICAL: Keep summary bullets extremely brief and factual. Use keywords, not full sentences.
-Examples of good bullets: "Caller: chest pain, 45yo male", "Location: 123 Main St", "Conscious, breathing normally"
+**OUTPUT**  
+Return **only** a valid JSON object with two keys:
 
-Be concise and focus on actionable information."""
+```json
+{
+  "summary": [           // updated running bullets
+    "Caller: chest pain, 45 M",
+    "Location: 123 Main St",
+    "Conscious, breathing normal"
+  ],
+  "advice": [            // max 2 bullets, second-person voice
+    "You should verify exact pain onset time",
+    "Ask whether aspirin taken recently"
+  ]
+}
+"""
 
         user_prompt = f"""=== CURRENT CALL SUMMARY ===
 {current_summary}
@@ -247,18 +258,22 @@ Be concise and focus on actionable information."""
 === FULL CONVERSATION HISTORY ===
 {conversation_history}
 
+=== PREVIOUS ADVICE GIVEN ===
+{self.prev_advice_cache or "None (first turn)"}
+
 === ANALYSIS REQUEST ===
 The above is the complete conversation history. The most recent message was from the {role}.
 
 Please analyze the conversation and provide:
 1. An updated summary of key facts
-2. Advice for what the dispatcher should do/say next"""
+2. Advice for what the dispatcher should do/say next
 
+Remember: DO NOT repeat anything from the "Previous Advice Given" section above. Avoid giving similar advice or asking about the same topics that were already covered in previous advice."""
         # 4) Call Groq
         groq_start = time.time()
         try:
             response = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -300,6 +315,10 @@ Please analyze the conversation and provide:
                 
                 timings.append(TimingStats("update_summary_async", 0, datetime.now().isoformat()))
 
+            # Update prev_advice cache with the new advice (regardless of role)
+            if "advice" in result:
+                self.prev_advice_cache = result["advice"]
+                
             total_time = (time.time() - start_time) * 1000
             timings.append(TimingStats("total_processing_fast", total_time, datetime.now().isoformat()))
             

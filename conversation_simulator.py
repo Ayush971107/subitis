@@ -52,14 +52,12 @@ class ConversationSimulator:
             print(f"\n📡 WEBHOOK CALL #{i}/{len(conversation_exchanges)}")
             print(f"🗣️  Caller: \"{caller_message}\"")
             print(f"⏰ Time: {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
+            print(f"🤖 Generating advice for dispatcher...")
             
             # Build full conversation context for the agent
             conversation_context = self._build_conversation_context()
             
-            # Add current caller message to context
-            current_input = f"CONVERSATION HISTORY:\n{conversation_context}\n\nNEW CALLER MESSAGE: {caller_message}"
-            
-            # Process through agent with role context
+            # Process caller message through agent to get advice for dispatcher
             result = self.agent.process_chunk_fast(caller_message, role="caller")
             
             webhook_call_end = time.time()
@@ -70,14 +68,16 @@ class ConversationSimulator:
                 {"speaker": "caller", "message": caller_message, "timestamp": datetime.now().isoformat()}
             )
             
-            # Only add dispatcher response if it's not empty
+            # Add dispatcher response to history (simulating human dispatcher's response)
             if expected_dispatcher_response:
+                print(f"👥 Dispatcher responds: \"{expected_dispatcher_response}\"")
                 self.full_conversation_history.append(
                     {"speaker": "dispatcher", "message": expected_dispatcher_response, "timestamp": datetime.now().isoformat()}
                 )
                 
-                # Process dispatcher response through agent to update context
-                _ = self.agent.process_chunk_fast(expected_dispatcher_response, role="dispatcher")
+                # Update agent's conversation context with dispatcher response (for memory only)
+                # This doesn't generate new advice, just updates context for next caller message
+                self.agent._update_conversation_async("dispatcher", expected_dispatcher_response)
             
             # Log this interaction
             interaction = {
@@ -93,25 +93,17 @@ class ConversationSimulator:
             
             self.conversation_log.append(interaction)
             
-            # Extract and display performance metrics
-            if "timings" in result:
-                self._display_performance_breakdown(result["timings"], webhook_duration, i, len(conversation_context))
-                self.performance_history.append({
-                    "call_number": i,
-                    "timings": result["timings"],
-                    "webhook_duration": webhook_duration,
-                    "context_length": len(conversation_context),
-                    "total_exchanges": len(self.full_conversation_history)
-                })
-            
             # Display conversation flow
             print(f"\n📋 CONVERSATION FLOW:")
             print(f"   👤 Caller: {caller_message}")
             print(f"   🚨 Expected Dispatcher: {expected_dispatcher_response}")
-            print(f"\n🤖 AGENT ADVICE:")
-            print(f"   Summary: {result.get('summary', [])}")
-            print(f"   Guidance: {result.get('advice', 'N/A')}")
-            print(f"   📏 Context Length: {len(conversation_context)} chars")
+            print(f"\n🤖 AGENT RAW OUTPUT:")
+            # Print clean JSON without modifying the data
+            agent_output = {
+                "summary": result.get('summary', []),
+                "advice": result.get('advice', '')
+            }
+            print(json.dumps(agent_output, indent=2))
             
             # Wait for next webhook call (except for last iteration)
             if i < len(conversation_exchanges):
@@ -317,10 +309,11 @@ def main():
     # Get realistic conversation with dispatcher responses
     conversation = create_realistic_emergency_conversation()
     
-    print(f"📋 Conversation Overview:")
+    print(f"\n📋 Conversation Overview:")
     print(f"   • {len(conversation)} conversation exchanges")
-    print(f"   • Each exchange includes caller message + dispatcher response")
-    print(f"   • Agent will see growing context of full conversation history")
+    print(f"   • Agent generates advice only when caller speaks")
+    print(f"   • Dispatcher responses are simulated human responses")
+    print(f"   • Agent tracks full conversation context for better advice")
     
     # Run simulation
     results = simulator.simulate_conversation(conversation)
@@ -329,12 +322,11 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"full_conversation_simulation_{timestamp}.json"
     
-    print(f"\n💾 Saving detailed results to: {filename}")
+    print(f"\n💾 Saving conversation transcript to: {filename}")
     with open(filename, 'w') as f:
         json.dump(results, f, indent=2, default=str)
     
-    print(f"\n✅ Simulation complete! Check {filename} for detailed logs.")
-    print(f"🔍 Key insight: Watch how performance degrades as conversation history grows")
+    print(f"\n✅ Simulation complete! Check {filename} for the full conversation transcript.")
 
 
 if __name__ == "__main__":
