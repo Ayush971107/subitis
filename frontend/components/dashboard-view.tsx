@@ -18,6 +18,7 @@ import {
   Plus,
   Stethoscope,
   Minus,
+  Dot,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -100,6 +101,49 @@ export function DashboardView() {
 }
 
 function IncidentOverviewCard() {
+  const [summary, setSummary] = useState<string[]>([])
+  const [callInfo, setCallInfo] = useState({
+    caller: "Unknown",
+    age: "Unknown",
+    problem: "Unknown",
+  })
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/suggestions.json")
+        .then((res) => res.json())
+        .then((data) => {
+          setSummary(data.summary || [])
+
+          // Extract values from summary lines
+          const callerLine = data.summary.find((line) =>
+            line.toLowerCase().startsWith("caller:")
+          )
+          const ageLine = data.summary.find((line) =>
+            line.toLowerCase().includes("age")
+          )
+          const problemLine = data.summary.find((line) =>
+            line.toLowerCase().includes("chest pain") ||
+            line.toLowerCase().includes("heart")
+          )
+
+          const caller = callerLine?.split(":")[1]?.trim() || "Unknown"
+          const age = ageLine?.match(/\d+/)?.[0] || "Unknown"
+          const problem =
+            problemLine?.toLowerCase().includes("chest pain")
+              ? "Chest Pain"
+              : problemLine?.toLowerCase().includes("heart")
+              ? "Heart Condition"
+              : "Unknown"
+
+          setCallInfo({ caller, age, problem })
+        })
+        .catch((err) => console.error("Failed to load:", err))
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="p-2 pb-1">
@@ -107,7 +151,7 @@ function IncidentOverviewCard() {
           <div>
             <CardTitle className="text-sm">Live Incident Overview</CardTitle>
             <CardDescription className="text-xs">
-              Ongoing emergency call - 00:12:45
+              Ongoing emergency call
             </CardDescription>
           </div>
           <Badge className="bg-red-500 text-xs text-white hover:bg-red-600">
@@ -115,108 +159,44 @@ function IncidentOverviewCard() {
           </Badge>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-2 p-2 pt-0">
-        {/* Client Info Summary */}
+        {/* Caller Info */}
         <div className="rounded-md bg-muted p-2">
-          <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3">
             <div>
-              <p className="text-xs text-muted-foreground">Name</p>
-              <p className="text-xs font-medium">Sarah Thompson</p>
+              <p className="text-xs text-muted-foreground">Caller</p>
+              <p className="text-xs font-medium">{callInfo.caller}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Age</p>
-              <p className="text-xs font-medium">42</p>
+              <p className="text-xs text-muted-foreground">Patient Age</p>
+              <p className="text-xs font-medium">{callInfo.age}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Emergency Type</p>
               <div className="flex items-center gap-1">
                 <Heart className="h-3 w-3 text-red-500" />
-                <p className="text-xs font-medium">Cardiac</p>
+                <p className="text-xs font-medium">{callInfo.problem}</p>
               </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Known Conditions</p>
-              <p className="text-xs font-medium">Hypertension</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Transcription */}
-        <div className="max-h-24 space-y-1 overflow-y-auto rounded-md bg-muted/50 p-2 text-xs">
-          <div className="flex gap-1">
-            <Badge
-              variant="outline"
-              className="shrink-0 bg-background px-1 py-0 text-[10px]"
-            >
-              Caller
-            </Badge>
-            <p>
-              She's having chest pain and difficulty breathing. It started about
-              20 minutes ago.
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Badge
-              variant="outline"
-              className="shrink-0 bg-background px-1 py-0 text-[10px]"
-            >
-              You
-            </Badge>
-            <p>
-              Is she conscious and responsive? Can you check if her lips or
-              fingertips are turning blue?
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Badge
-              variant="outline"
-              className="shrink-0 bg-background px-1 py-0 text-[10px]"
-            >
-              Caller
-            </Badge>
-            <p>
-              Yes, she's awake but very uncomfortable. Her lips look normal but
-              she says the pain is spreading to her left arm now.
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Badge
-              variant="outline"
-              className="shrink-0 bg-background px-1 py-0 text-[10px]"
-            >
-              You
-            </Badge>
-            <p>
-              That could indicate a heart attack. Help is on the way. Can you
-              help her into a comfortable position, preferably sitting upright?
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Badge
-              variant="outline"
-              className="shrink-0 bg-background px-1 py-0 text-[10px]"
-            >
-              Caller
-            </Badge>
-            <p className="text-teal-500">...</p>
           </div>
         </div>
 
         {/* Risk Tags */}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 pt-2">
           <Badge
             variant="outline"
             className="flex items-center gap-1 border-red-500/50 text-[10px] text-red-500"
           >
             <Heart className="h-2 w-2" />
-            <span>Cardiac</span>
+            <span>{callInfo.problem}</span>
           </Badge>
           <Badge
             variant="outline"
             className="flex items-center gap-1 border-yellow-500/50 text-[10px] text-yellow-500"
           >
             <AlertTriangle className="h-2 w-2" />
-            <span>Urgent</span>
+            <span>Active</span>
           </Badge>
           <Badge
             variant="outline"
@@ -232,87 +212,56 @@ function IncidentOverviewCard() {
 }
 
 function AISuggestionsPanel() {
+  const [allAdvice, setAllAdvice] = useState<string[]>([])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch('/suggestions.json')
+        .then((res) => res.json())
+        .then(({ advice }) => {
+          setAllAdvice((prevAdvice) => {
+            // Append new unique advice (filter out duplicates)
+            const newAdvice = advice.filter((advice) => !prevAdvice.includes(advice))
+            if (newAdvice.length === 0) return prevAdvice
+
+            const updatedAdvice = [...newAdvice, ...prevAdvice] // New advice on top
+
+            // Save to localStorage for persistence
+            localStorage.setItem('aiSuggestions', JSON.stringify(updatedAdvice))
+
+            return updatedAdvice
+          })
+        })
+        .catch((e) => console.error('Failed to load suggestions:', e))
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <Card>
       <CardHeader className="p-2 pb-1">
-        <CardTitle className="text-sm">AI Suggestions</CardTitle>
+        <CardTitle className="text-sm">Live Advice & Summary</CardTitle>
         <CardDescription className="text-xs">
-          Recommended actions based on current situation
+          Updated recommendations based on live analysis
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-1 p-2 pt-0">
-        <div className="grid grid-cols-2 gap-1">
-          <div className="flex items-start gap-1">
-            <Checkbox
-              id="suggestion-1"
-              className="mt-0.5 h-3 w-3 data-[state=checked]:bg-teal-500 data-[state=checked]:text-white"
-            />
-            <div className="grid gap-0">
-              <label htmlFor="suggestion-1" className="text-xs font-medium">
-                Ask about medication history
-              </label>
-              <p className="text-[10px] text-muted-foreground">
-                Specifically inquire about blood thinners or heart medication
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-start gap-1">
-            <Checkbox
-              id="suggestion-2"
-              className="mt-0.5 h-3 w-3 data-[state=checked]:bg-teal-500 data-[state=checked]:text-white"
-            />
-            <div className="grid gap-0">
-              <label htmlFor="suggestion-2" className="text-xs font-medium">
-                Instruct to provide aspirin if available
-              </label>
-              <p className="text-[10px] text-muted-foreground">
-                One adult aspirin (325mg) or 4 baby aspirin (81mg each)
-              </p>
-            </div>
+      <CardContent className="space-y-1 p-2 pt-0 text-xs">
+        {allAdvice.length === 0 ? (
+          <p>No advice yet</p>
+        ) : (
+          <div className="max-h-32 overflow-y-auto border rounded-md p-2 bg-muted/30">
+            <ul className="list-disc list-inside space-y-1">
+              {allAdvice.map((item, i) => (
+                <li key={i} className="text-xs leading-relaxed">
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
-
-          <div className="flex items-start gap-1">
-            <Checkbox
-              id="suggestion-3"
-              className="mt-0.5 h-3 w-3 data-[state=checked]:bg-teal-500 data-[state=checked]:text-white"
-            />
-            <div className="grid gap-0">
-              <label htmlFor="suggestion-3" className="text-xs font-medium">
-                Check for allergies
-              </label>
-              <p className="text-[10px] text-muted-foreground">
-                Confirm any known drug allergies before suggesting medication
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-1">
-            <Checkbox
-              id="suggestion-4"
-              className="mt-0.5 h-3 w-3 data-[state=checked]:bg-teal-500 data-[state=checked]:text-white"
-            />
-            <div className="grid gap-0">
-              <label htmlFor="suggestion-4" className="text-xs font-medium">
-                Monitor breathing pattern
-              </label>
-              <p className="text-[10px] text-muted-foreground">
-                Ask caller to describe breathing - rapid, shallow, labored
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
       </CardContent>
-      <CardFooter className="p-2 pt-0">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-6 w-full gap-1 border-dashed text-xs"
-        >
-          <Plus className="h-3 w-3" />
-          <span>Add custom action</span>
-        </Button>
-      </CardFooter>
     </Card>
   )
 }
@@ -865,66 +814,45 @@ function HotlinesPanel() {
 }
 
 function CaseMemoryPanel() {
+  const [summaryItems, setSummaryItems] = useState<string[]>([])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/suggestions.json")
+        .then((res) => res.json())
+        .then((data) => {
+          const newSummaries = data.summary.filter(
+            (item: string) => !summaryItems.includes(item)
+          )
+          if (newSummaries.length > 0) {
+            setSummaryItems((prev) => [...newSummaries, ...prev])
+          }
+        })
+        .catch((err) => console.error("Failed to fetch summary:", err))
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [summaryItems])
+
   return (
     <Card className="h-full overflow-hidden">
       <CardHeader className="p-2 pb-1">
-        <CardTitle className="text-sm">Case Memory</CardTitle>
+        <CardTitle className="text-sm">Live Case Summary</CardTitle>
         <CardDescription className="text-xs">
           Timeline of key facts collected
         </CardDescription>
       </CardHeader>
+
       <CardContent className="h-[calc(100%-2.5rem)] overflow-y-auto p-2 pt-0">
         <div className="relative space-y-2 pl-4 text-xs before:absolute before:left-1 before:top-2 before:h-[calc(100%-16px)] before:w-px before:bg-muted-foreground/20">
-          {/* Timeline Items */}
-          <TimelineItem time="00:01:23" label="Call initiated">
-            <p className="text-[10px]">
-              Emergency call received from Sarah Thompson's residence.
-            </p>
-          </TimelineItem>
-
-          <TimelineItem
-            time="00:02:45"
-            label="Symptoms identified"
-            isHighlighted
-          >
-            <p className="text-[10px]">
-              Patient experiencing chest pain radiating to left arm and
-              difficulty breathing.
-            </p>
-            <Badge
-              variant="outline"
-              className="mt-0.5 gap-1 border-red-500/50 px-1 py-0 text-[8px] text-red-500"
-            >
-              <Heart className="h-2 w-2" />
-              <span>Cardiac</span>
-            </Badge>
-          </TimelineItem>
-
-          <TimelineItem time="00:04:12" label="Medical history">
-            <p className="text-[10px]">
-              History of hypertension. Currently taking lisinopril 10mg daily.
-            </p>
-          </TimelineItem>
-
-          <TimelineItem time="00:06:30" label="Vital signs" isHighlighted>
-            <p className="text-[10px]">
-              Conscious and alert. No cyanosis observed. Pain level reported as
-              8/10.
-            </p>
-          </TimelineItem>
-
-          <TimelineItem time="00:08:45" label="Action taken">
-            <p className="text-[10px]">
-              Advised to take aspirin 325mg. Caller confirmed no aspirin
-              allergies.
-            </p>
-          </TimelineItem>
-
-          <TimelineItem time="00:10:20" label="EMS dispatched">
-            <p className="text-[10px]">
-              Ambulance dispatched to location. ETA 4 minutes.
-            </p>
-          </TimelineItem>
+          {summaryItems.map((item, i) => (
+            <div key={i} className="relative pl-2">
+              <span className="absolute -left-[9px] top-1">
+                <Dot className="h-3 w-3 text-muted-foreground" />
+              </span>
+              <p className="text-[10px]">{item}</p>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>

@@ -1,0 +1,18 @@
+{
+  "summary": [
+    "Caller: Sarah",
+    "Patient: husband, age 45",
+    "Husband collapsed at home, unresponsive but breathing",
+    "Skin appears pale and sweaty",
+    "History of heart problems and recent chest pain",
+    "Location: 123 Oak Street (blue house, front door entry)",
+    "Caller knows CPR and is ready to assist"
+  ],
+  "advice": [
+    "Ask the caller to confirm if the patient is still breathing normally",
+    "Check if the patient has taken any heart medication or aspirin",
+    "Advise the caller to keep the patient calm and seated",
+    "Instruct the caller to monitor for slurred speech or confusion",
+    "Confirm if there's someone available to guide EMS to the door"
+  ]
+}
