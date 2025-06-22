@@ -1,12 +1,14 @@
 import os
 import json
 import time
-import asyncio
-from typing import List, Dict, Tuple, Optional
+import hashlib
+import threading
+from typing import Dict, List, Optional, Any, Tuple, Optional
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 import hashlib
+import asyncio
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -72,6 +74,12 @@ class DispatcherAgent:
         self.rag_cache = {}
         self.prev_advice_cache = ""
         
+        # Add synchronization locks
+        self._conversation_lock = threading.Lock()
+        self._pending_update = False
+        self._last_successful_cache = self.conversation_cache
+        self._skip_count = 0  # Track how many updates we've skipped
+
     def _get_text_hash(self, text: str) -> str:
         """Generate a hash for caching purposes"""
         return hashlib.md5(text.encode()).hexdigest()[:8]
@@ -144,11 +152,25 @@ class DispatcherAgent:
             print(f"Warning: Failed to update summary: {e}")
             
     def _update_conversation_async(self, role: str, message: str):
-        """Update conversation history asynchronously"""
+        """Update conversation history with proper synchronization"""
         try:
-            # Update in-memory cache
-            new_entry = f"{role}: {message}\n"
-            self.conversation_cache += new_entry
+            with self._conversation_lock:
+                # Update in-memory cache
+                new_entry = f"{role}: {message}\n"
+                self.conversation_cache += new_entry
+                
+                # Skip update if one is already pending
+                if self._pending_update:
+                    self._skip_count += 1
+                    if self._skip_count == 10:
+                        pass  
+                    return
+                
+                self._pending_update = True
+                current_cache = self.conversation_cache
+                if self._skip_count > 0:
+                    pass  
+                    self._skip_count = 0  # Reset skip count
             
             # Update Letta in background
             def _update():
@@ -156,20 +178,32 @@ class DispatcherAgent:
                     letta_client.agents.blocks.modify(
                         agent_id=self.agent.id,
                         block_label="full_conversation",
-                        value=self.conversation_cache
+                        value=current_cache
                     )
+                    # Update successful cache on success
+                    with self._conversation_lock:
+                        self._last_successful_cache = current_cache
+                    pass  
+                    
                 except Exception as e:
-                    print(f"Warning: Failed to update conversation: {e}")
+                    print(f"Warning: Failed to update conversation in Letta: {e}")
+                    # Revert to last successful state on failure
+                    with self._conversation_lock:
+                        self.conversation_cache = self._last_successful_cache
+                finally:
+                    with self._conversation_lock:
+                        self._pending_update = False
             
             # Run in background thread
-            import threading
             thread = threading.Thread(target=_update)
             thread.daemon = True
             thread.start()
             
         except Exception as e:
-            print(f"Warning: Failed to update conversation: {e}")
-            
+            print(f"Warning: Failed to update conversation cache: {e}")
+            with self._conversation_lock:
+                self._pending_update = False
+
     def _get_full_conversation(self) -> str:
         """Get the full conversation history"""
         if not self.conversation_cache:
@@ -340,43 +374,43 @@ Remember: DO NOT repeat anything from the "Previous Advice Given" section above.
                 "timings": []
             }
 
-def print_timings(timings):
-    print("\n=== Performance Timings ===")
-    for t in timings:
-        print(f"{t['operation']}: {t['duration_ms']:.2f}ms")
-    print("=" * 25)
+# def print_timings(timings):
+#     print("\n=== Performance Timings ===")
+#     for t in timings:
+#         print(f"{t['operation']}: {t['duration_ms']:.2f}ms")
+#     print("=" * 25)
 
-if __name__ == "__main__":
-    agent = DispatcherAgent()
+# if __name__ == "__main__":
+#     agent = DispatcherAgent()
 
-    # Example conversation flow
-    conversation = [
-        ("caller", "911, what's your emergency?"),
-        ("dispatcher", "Hello, this is 911. What's your emergency?"),
-        ("caller", "I have a really bad headache and fever since this morning"),
-        ("dispatcher", "I'm sorry to hear that. Can you tell me if you're having any other symptoms?"),
-        ("caller", "Yes, I also feel nauseous and my temperature is 101.5"),
-        ("dispatcher", "I'll get help to you right away. Are you alone right now?")
-    ]
+#     # Example conversation flow
+#     conversation = [
+#         ("caller", "911, what's your emergency?"),
+#         ("dispatcher", "Hello, this is 911. What's your emergency?"),
+#         ("caller", "I have a really bad headache and fever since this morning"),
+#         ("dispatcher", "I'm sorry to hear that. Can you tell me if you're having any other symptoms?"),
+#         ("caller", "Yes, I also feel nauseous and my temperature is 101.5"),
+#         ("dispatcher", "I'll get help to you right away. Are you alone right now?")
+#     ]
     
-    print(f"\n{'='*50}")
-    print("Simulating conversation...\n")
+#     print(f"\n{'='*50}")
+#     print("Simulating conversation...\n")
     
-    for i, (role, text) in enumerate(conversation, 1):
-        print(f"{role.upper()}: {text}")
+#     for i, (role, text) in enumerate(conversation, 1):
+#         print(f"{role.upper()}: {text}")
         
-        # Only process dispatcher messages to generate responses
-        if role == "dispatcher":
-            print("\nProcessing dispatcher message...")
-            out = agent.process_chunk_fast(text, role=role)
+#         # Only process dispatcher messages to generate responses
+#         if role == "dispatcher":
+#             print("\nProcessing dispatcher message...")
+#             out = agent.process_chunk_fast(text, role=role)
             
-            print("\n=== Assistant Analysis ===")
-            print("Updated Summary:")
-            for point in out["summary"]:
-                print(f"- {point}")
-            print("\nSuggested Next Steps:", out["advice"])
+#             print("\n=== Assistant Analysis ===")
+#             print("Updated Summary:")
+#             for point in out["summary"]:
+#                 print(f"- {point}")
+#             print("\nSuggested Next Steps:", out["advice"])
             
-            if "timings" in out:
-                print("\nPerformance Timings:")
-                print_timings(out["timings"])
-            print("\n" + "-"*50 + "\n")
+#             if "timings" in out:
+#                 print("\nPerformance Timings:")
+#                 print_timings(out["timings"])
+#             print("\n" + "-"*50 + "\n")
