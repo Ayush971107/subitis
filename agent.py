@@ -45,13 +45,18 @@ letta_client = Letta(
 
 class DispatcherAgent:
     def __init__(self):
-        # Create a Letta agent for memory management only
+        # Create a Letta agent for memory management
         self.agent = letta_client.agents.create(
             memory_blocks=[
                 {
                     "label": "call_history",
                     "value": "",
                     "description": "Rolling bullet-point summary of the call so far"
+                },
+                {
+                    "label": "full_conversation",
+                    "value": "",
+                    "description": "Complete conversation history in format: [role]: [message]"
                 }
             ],
             system="You are a memory manager for crisis dispatch calls.",
@@ -62,6 +67,7 @@ class DispatcherAgent:
         # In-memory cache for embeddings and summaries
         self.embedding_cache = {}
         self.summary_cache = None
+        self.conversation_cache = ""
         self.summary_cache_time = 0
         self.rag_cache = {}
         
@@ -135,41 +141,93 @@ class DispatcherAgent:
             self.summary_cache_time = time.time()
         except Exception as e:
             print(f"Warning: Failed to update summary: {e}")
+            
+    def _update_conversation_async(self, role: str, message: str):
+        """Update conversation history asynchronously"""
+        try:
+            # Update in-memory cache
+            new_entry = f"{role}: {message}\n"
+            self.conversation_cache += new_entry
+            
+            # Update Letta in background
+            def _update():
+                try:
+                    letta_client.agents.blocks.modify(
+                        agent_id=self.agent.id,
+                        block_label="full_conversation",
+                        value=self.conversation_cache
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to update conversation: {e}")
+            
+            # Run in background thread
+            import threading
+            thread = threading.Thread(target=_update)
+            thread.daemon = True
+            thread.start()
+            
+        except Exception as e:
+            print(f"Warning: Failed to update conversation: {e}")
+            
+    def _get_full_conversation(self) -> str:
+        """Get the full conversation history"""
+        if not self.conversation_cache:
+            try:
+                block = letta_client.agents.blocks.retrieve(
+                    agent_id=self.agent.id,
+                    block_label="full_conversation"
+                )
+                self.conversation_cache = block.value if block else ""
+            except Exception as e:
+                print(f"Warning: Failed to fetch conversation: {e}")
+                self.conversation_cache = ""
+        return self.conversation_cache
 
-    def process_chunk_fast(self, transcript_chunk: str) -> Dict:
+    def process_chunk_fast(self, transcript_chunk: str, role: str = "caller") -> Dict:
         """
-        Optimized version of process_chunk with caching and async operations
+        Process a chunk of conversation with role context
+        
+        Args:
+            transcript_chunk: The text of the message
+            role: Either 'caller' or 'dispatcher' to indicate who is speaking
+            
         Returns: {"summary": [...], "advice": "...", "timings": [...]}
         """
         timings = []
         start_time = time.time()
         
-        # 1) Get current summary (with caching)
+        # 1) Update conversation history with new message
+        self._update_conversation_async(role, transcript_chunk)
+        
+        # 2) Get current summary (with caching)
         summary_start = time.time()
         current_summary = self._get_current_summary_fast()
+        conversation_history = self._get_full_conversation()
         summary_time = (time.time() - summary_start) * 1000
-        timings.append(TimingStats("get_summary_fast", summary_time, datetime.now().isoformat()))
+        timings.append(TimingStats("get_summary_and_history", summary_time, datetime.now().isoformat()))
         
-        # 2) Get RAG passages (with caching)
-        passages, rag_time = self._get_rag_passages_fast(transcript_chunk)
+        # 3) Get RAG passages (with caching) - use both current chunk and recent conversation
+        rag_query = f"{transcript_chunk}\n\nRecent conversation:\n{conversation_history[-1000:]}"  # Use last ~1000 chars for context
+        passages, rag_time = self._get_rag_passages_fast(rag_query)
         timings.append(TimingStats("rag_retrieval_fast", rag_time, datetime.now().isoformat()))
         
         rag_context = "\n\n".join(passages)
 
-        # 3) Build prompt for Groq
-        system_prompt = f"""You are an AI assistant helping emergency dispatchers during live 911 calls.
+        # 4) Build prompt for Groq
+        system_prompt = """You are an AI assistant helping emergency dispatchers during live 911 calls.
 
 You will receive:
 1. Current call summary from memory
 2. Dispatcher guidelines/protocols from knowledge base
-3. Current conversation context (full caller-dispatcher exchange history)
-4. New caller message
+3. Complete conversation history between caller and dispatcher
+4. Most recent message (from either caller or dispatcher)
 
 Your job:
-- Analyze what the caller just said in context of the full conversation
+- Analyze the conversation in full context
 - Identify any NEW information that hasn't been addressed yet
-- Avoid repeating guidance the dispatcher has already given
+- Track what guidance has already been given by the dispatcher
 - Provide specific, actionable advice for what the dispatcher should do/ask next
+- Consider the full conversation flow when generating responses
 
 Respond with a JSON object containing:
 - "summary": array of SHORT bullet-point facts (max 5-8 words each)
@@ -180,15 +238,21 @@ Examples of good bullets: "Caller: chest pain, 45yo male", "Location: 123 Main S
 
 Be concise and focus on actionable information."""
 
-        user_prompt = f"""Current call summary:
+        user_prompt = f"""=== CURRENT CALL SUMMARY ===
 {current_summary}
 
-Dispatcher guidelines context:
+=== APPLICABLE GUIDELINES ===
 {rag_context}
 
-{transcript_chunk}
+=== FULL CONVERSATION HISTORY ===
+{conversation_history}
 
-Analyze the conversation and provide updated summary with advice for what the dispatcher should do next."""
+=== ANALYSIS REQUEST ===
+The above is the complete conversation history. The most recent message was from the {role}.
+
+Please analyze the conversation and provide:
+1. An updated summary of key facts
+2. Advice for what the dispatcher should do/say next"""
 
         # 4) Call Groq
         groq_start = time.time()
@@ -266,18 +330,34 @@ def print_timings(timings):
 if __name__ == "__main__":
     agent = DispatcherAgent()
 
-    # Test single run
-    test_text = "I have a headache since morning, since afternoon i began feeling feverish"
+    # Example conversation flow
+    conversation = [
+        ("caller", "911, what's your emergency?"),
+        ("dispatcher", "Hello, this is 911. What's your emergency?"),
+        ("caller", "I have a really bad headache and fever since this morning"),
+        ("dispatcher", "I'm sorry to hear that. Can you tell me if you're having any other symptoms?"),
+        ("caller", "Yes, I also feel nauseous and my temperature is 101.5"),
+        ("dispatcher", "I'll get help to you right away. Are you alone right now?")
+    ]
     
     print(f"\n{'='*50}")
-    print(f"Test: Processing transcript chunk...")
-    out = agent.process_chunk_fast(test_text)
+    print("Simulating conversation...\n")
     
-    print("\n=== Results ===")
-    print("Summary bullets:", out["summary"])
-    print("Advice:", out["advice"])
-    
-    if "timings" in out:
-        print_timings(out["timings"])
-    else:
-        print("No timing information available")
+    for i, (role, text) in enumerate(conversation, 1):
+        print(f"{role.upper()}: {text}")
+        
+        # Only process dispatcher messages to generate responses
+        if role == "dispatcher":
+            print("\nProcessing dispatcher message...")
+            out = agent.process_chunk_fast(text, role=role)
+            
+            print("\n=== Assistant Analysis ===")
+            print("Updated Summary:")
+            for point in out["summary"]:
+                print(f"- {point}")
+            print("\nSuggested Next Steps:", out["advice"])
+            
+            if "timings" in out:
+                print("\nPerformance Timings:")
+                print_timings(out["timings"])
+            print("\n" + "-"*50 + "\n")

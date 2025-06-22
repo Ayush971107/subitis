@@ -7,4 +7,6 @@ test_subitis_guides.py
 test_vector_db.py
 *.json
 agent_fast.py
-conversation_simulator.py
+highway.py
+house_fire.py
+roadside.py
