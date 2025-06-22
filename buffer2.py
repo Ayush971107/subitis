@@ -11,9 +11,9 @@ from groq import Groq
 from agent import DispatcherAgent
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-WS_URL = "wss://0c26-2607-f140-400-21-9456-451f-ab0d-ebb1.ngrok-free.app/"
+WS_URL = "wss://e30c-2607-f140-400-21-d1c3-a928-d6c1-dd17.ngrok-free.app/"
 
-BUFFER_INTERVAL = 7.0
+BUFFER_INTERVAL = 5.5
 MAX_WORKERS = 3
 MAX_BUFFERED_MESSAGES = 1000
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -160,6 +160,8 @@ async def processing_worker(worker_id: str, websocket):
                     "role": "assistant",
                     "summary": out.get("summary", []),
                     "advice": out.get("advice", ""),
+                    "patient_age": out.get("patient_age", None),
+                    "criticality_level": out.get("criticality_level", "low"),
                     "processed_dialogue": coherent,
                     "worker_id": worker_id,
                     "raw_output": out,

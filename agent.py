@@ -264,10 +264,11 @@ You are an AI assistant supporting 911 dispatchers in real-time.
 - Understand the entire context, but respond **only to last_msg**.  
 - Detect **new, unaddressed facts** and merge them into *memory_summary* (add or update; max 5-8 words each).  
 - NEVER repeat anything found in **prev_advice**.  
-- Generate **specific, actionable guidance** for the dispatcher in **atmost two bullet points**, written in **second-person** (“You should …”, “Ask …”).  
+- Generate **specific, actionable guidance** for the dispatcher in **atmost two bullet points**, written in **second-person** (“You should …”, “Ask …”). 
+ 
 
 **OUTPUT**  
-Return **only** a valid JSON object with two keys:
+Return **only** a valid JSON object with these keys:
 
 ```json
 {
@@ -279,10 +280,18 @@ Return **only** a valid JSON object with two keys:
   "advice": [            // max 2 bullets, second-person voice
     "You should verify exact pain onset time",
     "Ask whether aspirin taken recently"
-  ]
+  ],
+  "patient_age": 45,     // extracted age if mentioned, null if unknown
+  "criticality_level": "medium"  // "low", "medium", "high", or "critical"
 }
-"""
+```
 
+**CRITICALITY LEVELS:**
+- **low**: Minor injuries, non-urgent medical issues
+- **medium**: Moderate pain, stable vital signs, non-life-threatening
+- **high**: Severe symptoms, potential for deterioration, urgent response needed  
+- **critical**: Life-threatening, cardiac arrest, severe trauma, immediate response required
+"""
         user_prompt = f"""=== CURRENT CALL SUMMARY ===
 {current_summary}
 
@@ -330,12 +339,16 @@ Remember: DO NOT repeat anything from the "Previous Advice Given" section above.
                 else:
                     result = {
                         "summary": [transcript_chunk],
-                        "advice": content
+                        "advice": content,
+                        "patient_age": None,
+                        "criticality_level": "low"
                     }
             except json.JSONDecodeError:
                 result = {
                     "summary": [transcript_chunk],
-                    "advice": content
+                    "advice": content,
+                    "patient_age": None,
+                    "criticality_level": "low"
                 }
 
             # 6) Update Letta memory asynchronously (fire and forget)
@@ -363,6 +376,8 @@ Remember: DO NOT repeat anything from the "Previous Advice Given" section above.
             return {
                 "summary": result.get("summary", []),
                 "advice": result.get("advice", ""),
+                "patient_age": result.get("patient_age", None),
+                "criticality_level": result.get("criticality_level", "low"),
                 "timings": timing_data
             }
 
@@ -371,6 +386,8 @@ Remember: DO NOT repeat anything from the "Previous Advice Given" section above.
             return {
                 "summary": [transcript_chunk],
                 "advice": "Error processing request. Please try again.",
+                "patient_age": None,
+                "criticality_level": "low",
                 "timings": []
             }
 
