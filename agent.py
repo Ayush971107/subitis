@@ -1,5 +1,3 @@
-# dispatcher_agent.py
-
 import os
 import json
 from typing import List, Dict
@@ -160,7 +158,7 @@ Update the summary with any new facts and provide advice."""
 if __name__ == "__main__":
     agent = DispatcherAgent()
 
-    new_text = "Caller says he is having chest pain and has high blood pressure."
+    new_text = "I have a headache since morning, since afternoon i began feeling feverish"
     out = agent.process_chunk(new_text)
     print("Summary bullets:", out["summary"])
     print("Advice:", out["advice"])
