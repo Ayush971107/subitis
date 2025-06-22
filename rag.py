@@ -94,7 +94,12 @@ def process_file(path: str):
         ids, texts = zip(*batch)
         embeddings = get_embeddings(list(texts))
 
-        vectors = list(zip(ids, embeddings))
+        # Create vectors with metadata containing the actual text
+        vectors = [
+            (id_val, embedding, {"text": text})
+            for id_val, embedding, text in zip(ids, embeddings, texts)
+        ]
+        
         for j in range(0, len(vectors), UPSERT_BATCH_SIZE):
             sub = vectors[j : j + UPSERT_BATCH_SIZE]
             index.upsert(vectors=sub)

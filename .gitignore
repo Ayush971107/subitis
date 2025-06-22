@@ -5,3 +5,6 @@ Dispatch_Training_Manual_structured.md
 node_modules/
 .next/
 pnpm-lock.yaml
+*.pyc
+test_subitis_guides.py
+test_vector_db.py
