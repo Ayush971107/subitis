@@ -13,7 +13,7 @@ from agent import DispatcherAgent
 # ── Configuration ─────────────────────────────────────────────────────────────
 WS_URL = "wss://0c26-2607-f140-400-21-9456-451f-ab0d-ebb1.ngrok-free.app/"
 
-BUFFER_INTERVAL = 4.0
+BUFFER_INTERVAL = 7.0
 MAX_WORKERS = 3
 MAX_BUFFERED_MESSAGES = 1000
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -153,17 +153,24 @@ async def processing_worker(worker_id: str, websocket):
                 logger.error(f"[{worker_id}] Agent processing timed out")
                 task_queue.task_done()
                 continue
-            # 5) Send back
+            # 5) Emit suggestions_update event to the main WebSocket server
             payload = {
-                "role": "assistant",
-                "summary": out.get("summary", []),
-                "advice": out.get("advice", ""),
-                "processed_dialogue": coherent,
-                "worker_id": worker_id
+                "event": "distribute_suggestions",
+                "data": {
+                    "role": "assistant",
+                    "summary": out.get("summary", []),
+                    "advice": out.get("advice", ""),
+                    "processed_dialogue": coherent,
+                    "worker_id": worker_id,
+                    "raw_output": out,
+                    "source": "ai_buffer_processor"  # Identify this as coming from the AI processor
+                }
             }
+            
+            # Send to main WebSocket server for distribution to all clients
             await websocket.send(json.dumps(payload))
-            logger.info(f"[{worker_id}] Sent summary: {payload['summary']}")
-            logger.info(f"[{worker_id}] Sent advice: {payload['advice']}")
+            logger.info(f"[{worker_id}] Sent suggestions_update event to main server for distribution")
+                
         except Exception as e:
             logger.error(f"[{worker_id}] Error: {e}")
         finally:
@@ -185,7 +192,7 @@ async def ws_handler():
                     msg = json.loads(raw)
                     if msg.get('event') == 'interim-transcription':
                         raw_queue.append(msg)
-                        logger.debug(f"Buffered fragment: {msg.get('text', '')[:30]}...")
+                        logger.debug(f"📨 Queued: {msg.get('metadata', {}).get('role', 'unknown')} - {msg.get('text', '')[:30]}...")
                 except json.JSONDecodeError:
                     logger.warning(f"Invalid JSON: {raw}")
         except Exception as e:
