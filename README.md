@@ -71,7 +71,7 @@ In high-stakes emergency response, every second and every detail matters. Dispat
 
 ## What’s next for Signal.ai  
 - **Multilingual Support**  
-  Transcription & guidance in Spanish, Mandarin, and other major languages.  
+  Transcription & guidance in Spanish, Mandarin, and in other major languages.  
 - **Predictive Analytics**  
   Call-volume forecasting and dynamic resource allocation to proactively manage dispatcher workloads.  
 - **Mobile Companion App**  
